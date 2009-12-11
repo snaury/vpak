@@ -1,0 +1,99 @@
+loader and emulation engine
+---------------------------
+
+There should be a small loader, that uses a simple lz-like algorithm to
+unpack the engine of vpak (that contains lzma unpacker and vpak hooks for
+API emulation). Shouldn't depend on any external APIs. Shouldn't contain
+any data. After unpacking and relocating main body shouldn't contain
+anything of interest (will be overwritten by the target program). Small
+stub in assembly (push engine_start; call do_the_work; jmp eax) the rest
+in pure C (one argument: address of the compressed engine, returns engine's
+entry point).
+
+Section naming for loader: .text (unpacker) and .data (compressed engine,
+imports, etc.) only, since some crappy antiviruses are very picky about
+executable structure (and section naming). We must be extremely careful,
+and look as much as regular application as possible.
+
+Engine. Should be relocatable and use minimum of external APIs (and no C
+runtime). The idea is to compile it as DLL (with custom entry point),
+which will be transformed into a relocatable module compressed for loader.
+After hooking necessary APIs, it should search bundle for the target and
+map it over the loader (there should be enough space reserved in the .data
+section). The process imports, relocations, etc. Of course loader will need
+to be tailored for every target executable.
+
+bundle file format
+------------------
+
+Main bundle is attached to the executable. It starts with "VPAK", then "LZMA"
+or maybe version/flags. After that the usual lzma header. Should be aligned
+to file alignment in PE header. Executable is mapped in memory, engine
+searches for VPAK on file alignment, allocates space, decompresses bundle,
+relocates pointers, now it can be worked with. It should be possible to mount
+other bundles too.
+
+Bundles should have two special root entries: emulated content for the bundle
+file itself and directory entries over the container name, both optional.
+Arbitrary mounts should be allowed too (relative to the bundle named directory,
+e.g. ".." would point to the directory where bundle file is located). It seems
+the mount points can be calculated using GetFullPathName: at least on WinXP
+it appears to normalize pathnames.
+
+Finally, loader and engine would just reserve space in memory and won't have
+any actual application code. Full compressed executable will be placed under
+emulation field of the executable's bundle.
+
+APIs to hook
+------------
+
+- files
+  - allocate handles with origCreateFile("NUL",...)
+    this way if they leak, it wouldn't matter much
+  - CreateFile
+  - CreateFileMapping/MapViewOfFile/etc?
+  - SetFilePointer/ReadFile
+  - WriteFile should return error for bundled files
+  - overlapped io maybe?
+  - FindFirst/FindNext, will probably be a bitch :(
+
+- modules
+  - LoadLibrary/Ex
+  - GetModuleHandle/Ex
+  - GetProcAddress
+  - FreeLibrary - bundled modules never go away
+
+- resources
+  - probably need to think of something here
+
+- special
+  - SetWindowsHook
+    needs a real handle, use app hmodule for bundled ones
+    this would matter at least for wxPython
+
+- what else?
+
+first steps
+-----------
+
+Since final version will probably be rather complex, first step should be
+in creating a library, libvpak, that would do hooking and emulation as
+part of the application. The plan so far
+
+- implement basic file system emulation
+  - vpak_initialize() should open the executable's bundle
+  - ability to mount other bundles
+  - CreateFile/ReadFile/etc should work
+  - at this step libvpak should be relatively usable
+- implement modules emulation
+  - LoadLibrary/etc should work
+  - loaded modules are never freed (FreeLibrary ignored)
+  - at this stage libvpak could be used as foundation for vpak-ruby
+- ...
+
+licensing
+---------
+
+For now license will be GPL2, but later I plan on adding exception that will
+make it possible to use vpak for commercial applications. Not much details
+here yet.

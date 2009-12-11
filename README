@@ -1,0 +1,5 @@
+vpak
+----
+
+Virtualized packer is supposed to be general purpose packer, that
+combines executable, shared libraries, and other files in one executable.

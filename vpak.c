@@ -1,7 +1,26 @@
+/*
+    vpak - virtualizing packer
+    Copyright (C) 2009  Alexey Borzenkov
+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License along
+    with this program; if not, write to the Free Software Foundation, Inc.,
+    51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+*/
+
 #include <windows.h>
 #include <stdio.h>
 
-void vpak_apply_hooks(HMODULE hModule, const char* szVirtualName);
+void vpak_apply_hooks(HMODULE hModule);
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -36,7 +55,7 @@ VPAK_HOOK(HMODULE WINAPI, LoadLibraryA, (LPCSTR lpFileName))
   printf("LoadLibraryA: '%s'\n", lpFileName);
   HMODULE hModule = orig_LoadLibraryA(lpFileName);
   if (hModule)
-    vpak_apply_hooks(hModule, lpFileName);
+    vpak_apply_hooks(hModule);
   return hModule;
 }
 
@@ -118,33 +137,30 @@ struct vpak_known_module* vpak_find_known_module_by_name(const char* szVirtualNa
 
 //////////////////////////////////////////////////////////////////////////////
 
-DWORD vpak_recursion_protection_count = 0;
-HMODULE vpak_recursion_protection[256];
+struct vpak_apply_hooks_recursion {
+  struct vpak_apply_hooks_recursion* next;
+  HMODULE hModule;
+};
 
-inline int vpak_recursion_detected(HMODULE hModule) {
-  unsigned i;
-  for (i = 0; i < vpak_recursion_protection_count; ++i)
-    if (vpak_recursion_protection[i] == hModule)
+inline int vpak_apply_hooks_recursion_detected(HMODULE hModule, struct vpak_apply_hooks_recursion* recursion) {
+  while (recursion) {
+    if (recursion->hModule == hModule)
       return 1;
+    recursion = recursion->next;
+  }
   return 0;
-}
-
-inline void vpak_recursion_push(HMODULE hModule)
-{
-  vpak_recursion_protection[vpak_recursion_protection_count++] = hModule;
-}
-
-inline void vpak_recursion_pop()
-{
-  --vpak_recursion_protection_count;
 }
 
 //////////////////////////////////////////////////////////////////////////////
 
-void vpak_apply_hooks(HMODULE hModule, const char* szVirtualName)
+void vpak_apply_hooks_inner(HMODULE hModule,
+                            struct vpak_apply_hooks_recursion* recursion)
 {
-  if (!hModule || vpak_recursion_detected(hModule))
+  if (!hModule)
     return;
+  if (vpak_apply_hooks_recursion_detected(hModule, recursion))
+    return;
+  struct vpak_apply_hooks_recursion our_recursion = { recursion, hModule };
 
   const char* pModule = (const char*)hModule;
   PIMAGE_DOS_HEADER dos_header = (PIMAGE_DOS_HEADER)pModule;
@@ -155,8 +171,6 @@ void vpak_apply_hooks(HMODULE hModule, const char* szVirtualName)
   if (!import_directory->VirtualAddress || !import_directory->Size)
     return; // no imports
 
-  //printf("Module %p(%s): vpak_apply_hooks start\n", hModule, szVirtualName);
-  vpak_recursion_push(hModule);
   PIMAGE_IMPORT_DESCRIPTOR import_descriptor;
   for (import_descriptor = (PIMAGE_IMPORT_DESCRIPTOR)(pModule + import_directory->VirtualAddress);
        import_descriptor->Name && import_descriptor->FirstThunk;
@@ -164,27 +178,27 @@ void vpak_apply_hooks(HMODULE hModule, const char* szVirtualName)
   {
     const char* name = pModule + import_descriptor->Name;
     HMODULE hImportModule = GetModuleHandle(name);
-    if (hImportModule) {
-      //printf("Module %p(%s): applying hooks to submodule %p '%s'\n", hModule, szVirtualName, hImportModule, name);
-      vpak_apply_hooks(hImportModule, name);
-    }
-    //printf("Module %p(%s): processing imports from '%s', FirstThunk = %p\n", hModule, szVirtualName, name, import_descriptor->FirstThunk);
+    if (hImportModule)
+      vpak_apply_hooks_inner(hImportModule, &our_recursion);
     void** p;
     for (p = (void**)(pModule + import_descriptor->FirstThunk); *p; ++p) {
       void* vpak_func = vpak_find_hook(*p);
       if (vpak_func) {
         DWORD dwOldProtect;
-        //printf("  ...hooking %p to %p\n", *p, vpak_func);
-        if (VirtualProtect(p, sizeof(*p), PAGE_READWRITE, &dwOldProtect)) {
+        if (VirtualProtect(p, sizeof(*p), PAGE_EXECUTE_READWRITE, &dwOldProtect)) {
           *p = vpak_func;
           VirtualProtect(p, sizeof(*p), dwOldProtect, &dwOldProtect);
-          FlushInstructionCache(NULL, p, sizeof(*p));
+          // FIXME: do we really need this?
+          // code imports seem pretty rate...
+          //FlushInstructionCache(NULL, p, sizeof(*p));
         }
       }
     }
   }
-  vpak_recursion_pop();
-  //printf("Module %p(%s): vpak_apply_hooks done\n", hModule, szVirtualName);
+}
+
+void vpak_apply_hooks(HMODULE hModule) {
+  vpak_apply_hooks_inner(hModule, NULL);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -198,5 +212,5 @@ void vpak_initialize()
     VPAK_HOOK_FOR(GetModuleHandleA);
     VPAK_HOOK_FOR(GetFileAttributesA);
   }
-  vpak_apply_hooks(GetModuleHandle(NULL), NULL);
+  vpak_apply_hooks(GetModuleHandle(NULL));
 }

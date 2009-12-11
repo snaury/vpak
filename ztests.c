@@ -17,17 +17,30 @@
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
 
-#ifndef __VPAK_H__
-#define __VPAK_H__
+#include <windows.h>
 
-#ifdef __cplusplus
-extern "C" {
+#define TEST_PATHNAMES
+
+#ifdef TEST_PATHNAMES
+
+#if 0
+/* test if there's network latency / drive spin-up */
+#define TEST_PATHNAME "\\\\AZUREBOX\\den750\\testme.exe\\.."
+/* it appears there's none, so it is very safe */
 #endif
 
-extern void vpak_initialize();
+#if 1
+/* test if slashes are converted and redundant dots are removed */
+#define TEST_PATHNAME "/testme.txt/some/path./here"
+/* hurray, they are! */
+#endif
 
-#ifdef __cplusplus
+int main(int argc, char** argv)
+{
+  char test_pathname[MAX_PATH] = { 0 };
+  GetFullPathName(TEST_PATHNAME, MAX_PATH, test_pathname, NULL);
+  printf("Result: '%s'\n", test_pathname);
+  return 0;
 }
-#endif
 
 #endif
