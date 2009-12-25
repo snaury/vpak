@@ -89,10 +89,9 @@ find_or_create_mount_entry(struct vpak_mount_entry* parent,
  * sets namesize to the size of component
  * returns NULL if path is empty
  */
-static
 const wchar_t*
-peek_component(const wchar_t** path,
-               int* namesize)
+vpak_peek_component(const wchar_t** path,
+                    int* namesize)
 {
   const wchar_t* p = *path;
   const wchar_t* e;

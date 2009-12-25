@@ -16,6 +16,8 @@
     with this program; if not, write to the Free Software Foundation, Inc.,
     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 */
+#ifndef __VPAK_BUNDLE_H__
+#define __VPAK_BUNDLE_H__
 
 #define VPAK_BUNDLE_TYPE_DIR 0
 #define VPAK_BUNDLE_TYPE_FILE 1
@@ -78,6 +80,22 @@ vpak_find_by_name(struct vpak_dir_entry* parent,
                   int namesize);
 
 /**
+ * vpak_peek_component
+ *
+ * peeks a single component from the path
+ * for UNC hostnames (e.g. \\host and \\?\UNC\host) returns host
+ * for drives (e.g. C:\ and \\?\C:\) returns C:
+ * returns pointer in path to the current component
+ * updates path to point past the component
+ * sets namesize to the size of component
+ * returns NULL if path is empty
+ */
+extern
+const wchar_t*
+vpak_peek_component(const wchar_t** path,
+                    int* namesize);
+
+/**
  * vpak_add_mount
  *
  * mounts specified dir and file entries under the path specified
@@ -104,3 +122,5 @@ extern
 struct vpak_mount_content*
 vpak_find_mount(const wchar_t* path,
                 const wchar_t** rest);
+
+#endif
