@@ -2,6 +2,8 @@
 
 char* strndup(const char* s, size_t n)
 {
+  char* r;
+  char* p;
   if (!s)
     return NULL;
   r = malloc(n + 1);

@@ -2,6 +2,8 @@
 
 wchar_t* wcsndup(const wchar_t* s, size_t n)
 {
+  wchar_t* r;
+  wchar_t* p;
   if (!s)
     return NULL;
   r = malloc(n * 2 + 2);
