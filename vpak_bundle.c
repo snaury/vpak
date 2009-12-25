@@ -137,7 +137,7 @@ vpak_add_mount(const wchar_t* path,
   int namesize;
   struct vpak_mount_entry* entry = NULL;
   struct vpak_mount_content* content;
-  while (name = peek_component(&path, &namesize))
+  while ((name = vpak_peek_component(&path, &namesize)))
     entry = find_or_create_mount_entry(entry, name, namesize);
   if (!entry)
     return;
