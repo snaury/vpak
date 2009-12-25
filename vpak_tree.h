@@ -82,4 +82,18 @@ vpak_tree_insert(struct vpak_tree** root,
                  struct vpak_tree* child,
                  vpak_tree_compare_t compare);
 
+/**
+ * vpak_tree_find
+ *
+ * looks for node under root with specified key
+ * node's payload is always first argument to compare
+ * key is always second argument to compare
+ * this allows for node's payload and key having different types
+ */
+extern
+const struct vpak_tree*
+vpak_tree_find(const struct vpak_tree* root,
+               const void* key,
+               vpak_tree_compare_t compare);
+
 #endif

@@ -129,3 +129,21 @@ vpak_tree_insert(struct vpak_tree** root,
   *root = node;
   return child;
 }
+
+const struct vpak_tree*
+vpak_tree_find(const struct vpak_tree* root,
+               const void* key,
+               vpak_tree_compare_t compare)
+{
+  int c;
+  while (root) {
+    c = compare(VPAK_TREE_CAST(const void*, root), key);
+    if (!c)
+      break;
+    if (c > 0)
+      root = root->l;
+    else
+      root = root->r;
+  }
+  return root;
+}
