@@ -20,72 +20,87 @@
 #define VPAK_BUNDLE_TYPE_DIR 0
 #define VPAK_BUNDLE_TYPE_FILE 1
 
-/* bundle file format */
+/* vpak bundles */
 
-struct vpak_bundle_entry
+struct vpak_entry
 {
   int type;
-  char* name;
-  wchar_t* wname;
+  wchar_t* name;
+  int namesize;
   /* TODO: attributes, creation/modification time */
-  unsigned char data[1]; /* dir_entry/file_entry/etc */
 };
 
-struct vpak_bundle_dir_entry
+struct vpak_dir_entry
 {
   unsigned int nchildren;
-  struct vpak_bundle_entry* children[1];
+  struct vpak_entry* children[];
 };
 
-struct vpak_bundle_file_entry
+struct vpak_file_entry
 {
   unsigned int size;
   unsigned char* data;
 };
 
-struct vpak_bundle_mount_entry
-{
-  char* name;
-  wchar_t* wname;
-  struct vpak_bundle_dir_entry* content;
-};
-
-struct vpak_bundle_header
-{
-  struct vpak_bundle_file_entry* emulation;
-  struct vpak_bundle_dir_entry* content;
-  unsigned int nmounts;
-  struct vpak_bundle_mount_entry* mounts[1];
-};
-
-extern struct vpak_bundle_entry* vpak_find_by_name(struct vpak_bundle_dir_entry* parent, const char* name);
-extern struct vpak_bundle_entry* vpak_find_by_wname(struct vpak_bundle_dir_entry* parent, const wchar_t* wname);
+#define VPAK_BUNDLE_ENTRY_AS_DIR_ENTRY(entry) \
+  ((vpak_dir_entry*)((entry) + 1))
+#define VPAK_BUNDLE_ENTRY_AS_FILE_ENTRY(entry) \
+  ((vpak_file_entry*)((entry) + 1))
 
 /* vpak mounts */
 
 struct vpak_mount_content
 {
-  struct vpak_bundle_dir_entry* dir_entry;
-  struct vpak_bundle_file_entru* file_entry;
-  struct vpak_bundle_mount_content* next;
+  struct vpak_dir_entry* dir_entry;
+  struct vpak_file_entry* file_entry;
+  struct vpak_mount_content* next;
 };
 
 struct vpak_mount_entry
 {
-  char* name;
+  wchar_t* name;
   int namesize;
-  wchar_t* wname;
-  int wnamesize;
   struct vpak_mount_entry* next;
   struct vpak_mount_entry* child;
   struct vpak_mount_content* content;
 };
 
-extern void vpak_add_mount(const char* name,
-                           struct vpak_bundle_dir_entry* dir_entry,
-                           struct vpak_bundle_file_entry* file_entry);
-extern void vpak_add_wmount(const wchar_t* wname,
-                            struct vpak_bundle_dir_entry* dir_entry,
-                            struct vpak_bundle_file_entry* file_entry);
-extern struct vpak_mount_content* vpak_find_mount(const char* name, const char** rest);
-extern struct vpak_mount_content* vpak_find_wmount(const wchar_t* wname, const char** wrest);
+/**
+ * vpak_find_by_name
+ *
+ * returns a child entry with the name specified
+ * NULL if not found
+ */
+extern
+struct vpak_entry*
+vpak_find_by_name(struct vpak_dir_entry* parent,
+                  const wchar_t* name,
+                  int namesize);
+
+/**
+ * vpak_add_mount
+ *
+ * mounts specified dir and file entries under the path specified
+ * path must be absolute and normalized (e.g. GetFullPathName)
+ * path can start with \\?\C:\name which will transform to C:\name
+ * path can start with \\?\UNC\host\name which will transform to \\host\name
+ */
+extern
+void
+vpak_add_mount(const wchar_t* path,
+               struct vpak_dir_entry* dir_entry,
+               struct vpak_file_entry* file_entry);
+
+/**
+ * vpak_find_mount
+ *
+ * searches for appropriate mount point for path and returns its content
+ * path must have same format as vpak_add_mount
+ * rest will be point to the part of path that is under the mount point
+ * caller is responsible for traversing returned linked list
+ * this function does not search for files, only mount points
+ */
+extern
+struct vpak_mount_content*
+vpak_find_mount(const wchar_t* path,
+                const wchar_t** rest);
